@@ -4,6 +4,10 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from wordcloud import WordCloud
 
+# Ensure Matplotlib uses the correct backend
+import matplotlib
+matplotlib.use("Agg")
+
 # Sample dataset for meal ratings, including Starbucks & The HUB
 data = {
     "Dining Hall": ["Husky Den", "Local Point", "Center Table", "The 8", "Denny Dining", 
