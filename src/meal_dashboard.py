@@ -1,8 +1,8 @@
-import streamlit as st
+import streamlit as st  # type: ignore
 import pandas as pd
 import matplotlib.pyplot as plt
-import seaborn as sns
-from wordcloud import WordCloud
+import seaborn as sns  # type: ignore
+from wordcloud import WordCloud  # type: ignore
 
 # Ensure Matplotlib uses the correct backend
 import matplotlib
@@ -19,6 +19,9 @@ data = {
 }
 
 df = pd.DataFrame(data)
+
+# Map affordability score to dollar signs ($, $$, $$$)
+df["Affordability ($)"] = df["Affordability Score (1-5)"].map({1: "$", 2: "$", 3: "$$", 4: "$$", 5: "$$$"})
 
 # Sample common feedback text for word cloud
 feedback_text = """
@@ -39,6 +42,9 @@ st.set_page_config(page_title="UW Dining Dashboard", layout="wide")
 st.title("📊 UW Dining Experience Dashboard")
 st.write("This dashboard provides insights into meal ratings, affordability, service speed, and student feedback trends across various UW dining locations.")
 
+# Sidebar Navigation
+page = st.sidebar.radio("Navigation", ["Meal Ratings", "Affordability", "Wait Times", "Feedback Trends"])
+
 # Sidebar Filter for Dining Hall Selection
 selected_dining_hall = st.sidebar.selectbox("Select a Dining Hall to View:", ["All"] + df["Dining Hall"].tolist())
 
@@ -48,36 +54,52 @@ if selected_dining_hall == "All":
 else:
     filtered_df = df[df["Dining Hall"] == selected_dining_hall]
 
-# 📈 **Bar Chart: Meal Ratings**
-st.subheader("📈 Average Meal Ratings by Dining Hall")
-fig, ax = plt.subplots(figsize=(10, 6))
-sns.barplot(x="Meal Rating (Avg)", y="Dining Hall", data=filtered_df, palette="viridis", ax=ax)
-ax.set_xlabel("Average Rating")
-ax.set_ylabel("Dining Hall / Food Service")
-ax.set_title("Meal Ratings Across UW Dining Locations")
-st.pyplot(fig)
+if page == "Meal Ratings":
+    # 📈 **Bar Chart: Meal Ratings**
+    st.subheader("📈 Average Meal Ratings by Dining Hall")
+    fig, ax = plt.subplots(figsize=(10, 6))
+    sns.barplot(x="Meal Rating (Avg)", y="Dining Hall", data=filtered_df, palette="viridis", ax=ax)
+    ax.set_xlabel("Average Rating")
+    ax.set_ylabel("Dining Hall / Food Service")
+    ax.set_title("Meal Ratings Across UW Dining Locations")
+    st.pyplot(fig)
 
-# ⏳ **Scatter Plot: Service Speed vs. Affordability**
-st.subheader("⏳ Service Speed vs. Affordability")
-fig, ax = plt.subplots(figsize=(10, 6))
-sns.scatterplot(x="Service Speed (Avg, min)", y="Affordability Score (1-5)", hue="Dining Hall",
-                size="Meal Rating (Avg)", sizes=(50, 300), data=filtered_df, palette="coolwarm", alpha=0.8, ax=ax)
-ax.set_xlabel("Service Speed (Avg. Minutes)")
-ax.set_ylabel("Affordability Score (1-5)")
-ax.set_title("Comparison of Service Speed and Affordability")
-ax.legend(loc="best", bbox_to_anchor=(1, 1))
-st.pyplot(fig)
+elif page == "Affordability":
+    # 💲 **Affordability Bar Chart**
+    st.subheader("💲 Affordability of Dining Locations")
+    fig, ax = plt.subplots(figsize=(10, 6))
+    sns.barplot(x="Affordability Score (1-5)", y="Dining Hall", data=filtered_df, palette="coolwarm", ax=ax)
+    ax.set_xlabel("Affordability Score (1-5)")
+    ax.set_ylabel("Dining Hall / Food Service")
+    ax.set_title("Affordability Across UW Dining Locations")
+    st.pyplot(fig)
 
-# 💬 **Word Cloud: Common Feedback Trends**
-st.subheader("💬 Common Student Feedback Trends")
-fig, ax = plt.subplots(figsize=(12, 6))
-ax.imshow(wordcloud, interpolation="bilinear")
-ax.axis("off")
-ax.set_title("Most Frequent Student Comments About Dining Services")
-st.pyplot(fig)
+    # Display affordability in dollar signs
+    st.write("### 💰 Affordability Ratings")
+    st.dataframe(filtered_df[["Dining Hall", "Affordability ($)"]])
+
+elif page == "Wait Times":
+    # ⏳ **Wait Time Visualization Chart**
+    st.subheader("⏳ Estimated Wait Times")
+    fig, ax = plt.subplots(figsize=(10, 6))
+    sns.barplot(x="Service Speed (Avg, min)", y="Dining Hall", data=filtered_df, palette="rocket", ax=ax)
+    ax.set_xlabel("Service Speed (Avg. Minutes)")
+    ax.set_ylabel("Dining Hall")
+    ax.set_title("Estimated Wait Times by Location")
+    st.pyplot(fig)
+
+elif page == "Feedback Trends":
+    # 💬 **Word Cloud: Common Feedback Trends**
+    st.subheader("💬 Common Student Feedback Trends")
+    fig, ax = plt.subplots(figsize=(12, 6))
+    ax.imshow(wordcloud, interpolation="bilinear")
+    ax.axis("off")
+    ax.set_title("Most Frequent Student Comments About Dining Services")
+    st.pyplot(fig)
 
 # 📋 **Display Filtered Data Table**
 st.subheader("📋 Dining Hall Details")
 st.dataframe(filtered_df)
 
 st.write("🔍 Use the filter in the sidebar to explore specific dining locations!")
+
