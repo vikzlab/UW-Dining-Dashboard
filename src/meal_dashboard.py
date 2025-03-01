@@ -3,12 +3,16 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns  # type: ignore
 from wordcloud import WordCloud  # type: ignore
+import os
 
 # Ensure Matplotlib uses the correct backend
 import matplotlib
 matplotlib.use("Agg")
 
-# Sample dataset for meal ratings, including Starbucks & The HUB
+# File for storing reviews
+REVIEWS_FILE = "reviews.csv"
+
+# Sample dataset for meal ratings, affordability, and wait times
 data = {
     "Dining Hall": ["Husky Den", "Local Point", "Center Table", "The 8", "Denny Dining", 
                     "Starbucks", "The HUB", "District Market", "Pagliacci Pizza", "Taco Truck"],
@@ -22,6 +26,41 @@ df = pd.DataFrame(data)
 
 # Map affordability score to dollar signs ($, $$, $$$)
 df["Affordability ($)"] = df["Affordability Score (1-5)"].map({1: "$", 2: "$", 3: "$$", 4: "$$", 5: "$$$"})
+
+# Load existing reviews if file exists
+if os.path.exists(REVIEWS_FILE):
+    reviews_df = pd.read_csv(REVIEWS_FILE)
+else:
+    reviews_df = pd.DataFrame(columns=["Dining Hall", "Rating", "Affordability", "Wait Time"])
+
+# Ensure numerical columns are properly formatted
+reviews_df["Rating"] = pd.to_numeric(reviews_df["Rating"], errors="coerce")
+reviews_df["Affordability"] = pd.to_numeric(reviews_df["Affordability"], errors="coerce")
+reviews_df["Wait Time"] = pd.to_numeric(reviews_df["Wait Time"], errors="coerce")
+
+# Aggregate new ratings and update values if there are reviews
+if not reviews_df.empty:
+    updated_ratings = reviews_df.groupby("Dining Hall", as_index=False).agg({
+        "Rating": "mean",
+        "Affordability": "mean",
+        "Wait Time": "mean"
+    })
+
+    # Rename aggregated columns before merging
+    updated_ratings.rename(columns={"Rating": "New Rating", 
+                                    "Affordability": "New Affordability", 
+                                    "Wait Time": "New Wait Time"}, inplace=True)
+
+    # Merge updated values into df
+    df = df.merge(updated_ratings, on="Dining Hall", how="left")
+
+    # Apply new values only where available
+    df["Meal Rating (Avg)"] = df["New Rating"].combine_first(df["Meal Rating (Avg)"])
+    df["Affordability Score (1-5)"] = df["New Affordability"].combine_first(df["Affordability Score (1-5)"])
+    df["Service Speed (Avg, min)"] = df["New Wait Time"].combine_first(df["Service Speed (Avg, min)"])
+
+    # Drop temporary columns
+    df.drop(columns=["New Rating", "New Affordability", "New Wait Time"], inplace=True, errors="ignore")
 
 # Sample common feedback text for word cloud
 feedback_text = """
@@ -39,67 +78,66 @@ wordcloud = WordCloud(width=1000, height=500, background_color="white", colormap
 
 # Streamlit UI Setup
 st.set_page_config(page_title="UW Dining Dashboard", layout="wide")
-st.title("📊 UW Dining Experience Dashboard")
-st.write("This dashboard provides insights into meal ratings, affordability, service speed, and student feedback trends across various UW dining locations.")
 
 # Sidebar Navigation
-page = st.sidebar.radio("Navigation", ["Meal Ratings", "Affordability", "Wait Times", "Feedback Trends"])
+page = st.sidebar.radio("Navigation", ["Home", "Meal Ratings", "Affordability", "Wait Times", "Feedback Trends", "Submit a Review"])
 
-# Sidebar Filter for Dining Hall Selection
-selected_dining_hall = st.sidebar.selectbox("Select a Dining Hall to View:", ["All"] + df["Dining Hall"].tolist())
+# **Homepage**
+if page == "Home":
+    st.title("🏠 Welcome to the UW Dining Experience Dashboard!")
+    st.write(
+        """
+        This interactive dashboard provides insights into meal ratings, affordability, wait times, and student feedback 
+        trends across various dining halls at the University of Washington. Use the navigation sidebar to explore different 
+        aspects of campus dining. You can also submit your own review to contribute to the data!
+        """
+    )
+    st.image("https://dining.uw.edu/wp-content/uploads/2021/09/StarbucksSuzyCake.jpg", use_column_width=True)
+    st.subheader("🔍 How to Use This Dashboard:")
+    st.markdown(
+        """
+        - **Meal Ratings:** View average ratings of different dining halls.
+        - **Affordability:** Compare meal pricing based on student affordability ratings.
+        - **Wait Times:** Check estimated service times for various locations.
+        - **Feedback Trends:** Explore common themes in student feedback using word clouds.
+        - **Submit a Review:** Add your own feedback and ratings to help improve dining experiences!
+        """
+    )
 
-# Apply Filter
-if selected_dining_hall == "All":
-    filtered_df = df
+# **Submit a Review**
+elif page == "Submit a Review":
+    st.subheader("✍️ Submit a Review")
+    dining_hall = st.selectbox("Select Dining Hall:", df["Dining Hall"])
+    rating = st.slider("Rate the Meal (1-5):", 1, 5, 3)
+    affordability = st.slider("Affordability (1-5):", 1, 5, 3)
+    wait_time = st.slider("Service Speed (Minutes):", 5, 20, 10)
+
+    if st.button("Submit Review"):
+        new_review = pd.DataFrame([[dining_hall, rating, affordability, wait_time]], columns=["Dining Hall", "Rating", "Affordability", "Wait Time"])
+        new_review.to_csv(REVIEWS_FILE, mode="a", header=not os.path.exists(REVIEWS_FILE), index=False)
+        st.success(f"Review submitted! The new average rating for {dining_hall} will be updated.")
+
+# **Other Pages**
 else:
-    filtered_df = df[df["Dining Hall"] == selected_dining_hall]
+    selected_dining_hall = st.sidebar.selectbox("Select a Dining Hall to View:", ["All"] + df["Dining Hall"].tolist())
+    filtered_df = df if selected_dining_hall == "All" else df[df["Dining Hall"] == selected_dining_hall]
 
-if page == "Meal Ratings":
-    # 📈 **Bar Chart: Meal Ratings**
-    st.subheader("📈 Average Meal Ratings by Dining Hall")
-    fig, ax = plt.subplots(figsize=(10, 6))
-    sns.barplot(x="Meal Rating (Avg)", y="Dining Hall", data=filtered_df, palette="viridis", ax=ax)
-    ax.set_xlabel("Average Rating")
-    ax.set_ylabel("Dining Hall / Food Service")
-    ax.set_title("Meal Ratings Across UW Dining Locations")
-    st.pyplot(fig)
+    if page == "Meal Ratings":
+        st.subheader("📈 Average Meal Ratings by Dining Hall")
+        fig, ax = plt.subplots(figsize=(10, 6))
+        sns.barplot(x="Meal Rating (Avg)", y="Dining Hall", data=filtered_df, palette="viridis", ax=ax)
+        st.pyplot(fig)
 
-elif page == "Affordability":
-    # 💲 **Affordability Bar Chart**
-    st.subheader("💲 Affordability of Dining Locations")
-    fig, ax = plt.subplots(figsize=(10, 6))
-    sns.barplot(x="Affordability Score (1-5)", y="Dining Hall", data=filtered_df, palette="coolwarm", ax=ax)
-    ax.set_xlabel("Affordability Score (1-5)")
-    ax.set_ylabel("Dining Hall / Food Service")
-    ax.set_title("Affordability Across UW Dining Locations")
-    st.pyplot(fig)
+    elif page == "Affordability":
+        st.subheader("💲 Affordability of Dining Locations")
+        st.dataframe(filtered_df[["Dining Hall", "Affordability ($)"]])
 
-    # Display affordability in dollar signs
-    st.write("### 💰 Affordability Ratings")
-    st.dataframe(filtered_df[["Dining Hall", "Affordability ($)"]])
+    elif page == "Wait Times":
+        st.subheader("⏳ Estimated Wait Times")
+        fig, ax = plt.subplots(figsize=(10, 6))
+        sns.barplot(x="Service Speed (Avg, min)", y="Dining Hall", data=filtered_df, palette="rocket", ax=ax)
+        st.pyplot(fig)
 
-elif page == "Wait Times":
-    # ⏳ **Wait Time Visualization Chart**
-    st.subheader("⏳ Estimated Wait Times")
-    fig, ax = plt.subplots(figsize=(10, 6))
-    sns.barplot(x="Service Speed (Avg, min)", y="Dining Hall", data=filtered_df, palette="rocket", ax=ax)
-    ax.set_xlabel("Service Speed (Avg. Minutes)")
-    ax.set_ylabel("Dining Hall")
-    ax.set_title("Estimated Wait Times by Location")
-    st.pyplot(fig)
-
-elif page == "Feedback Trends":
-    # 💬 **Word Cloud: Common Feedback Trends**
-    st.subheader("💬 Common Student Feedback Trends")
-    fig, ax = plt.subplots(figsize=(12, 6))
-    ax.imshow(wordcloud, interpolation="bilinear")
-    ax.axis("off")
-    ax.set_title("Most Frequent Student Comments About Dining Services")
-    st.pyplot(fig)
-
-# 📋 **Display Filtered Data Table**
-st.subheader("📋 Dining Hall Details")
-st.dataframe(filtered_df)
-
-st.write("🔍 Use the filter in the sidebar to explore specific dining locations!")
-
+    elif page == "Feedback Trends":
+        st.subheader("💬 Common Student Feedback Trends")
+        st.image(wordcloud.to_array(), use_column_width=True)
