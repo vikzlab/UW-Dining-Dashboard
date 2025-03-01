@@ -91,8 +91,7 @@ if page == "Home":
         trends across various dining halls at the University of Washington. Use the navigation sidebar to explore different 
         aspects of campus dining. You can also submit your own review to contribute to the data!
         """
-    )
-    st.image("https://dining.uw.edu/wp-content/uploads/2021/09/StarbucksSuzyCake.jpg", use_column_width=True)
+    ) 
     st.subheader("🔍 How to Use This Dashboard:")
     st.markdown(
         """
