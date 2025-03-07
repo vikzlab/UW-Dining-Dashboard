@@ -74,7 +74,7 @@ online ordering system is confusing, reduce waste with sustainable packaging, wi
 """
 
 # Generate word cloud
-wordcloud = WordCloud(width=1000, height=500, background_color="white", colormap="coolwarm").generate(feedback_text)
+wordcloud = WordCloud(width=1000, height=500, background_color="white", colormap="cividis").generate(feedback_text)
 
 # Streamlit UI Setup
 st.set_page_config(page_title="UW Dining Dashboard", layout="wide")
